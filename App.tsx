@@ -9,17 +9,25 @@ import {
   Platform,
   SafeAreaView,
   StatusBar,
-  useColorScheme
+  TextInput,
 } from "react-native";
 import { useWhisperModels } from "./src/hooks/useWhisperModel";
+import { useTextToSpeech } from "./src/hooks/useTextToSpeech";
 import RNFS from "react-native-fs";
 import { TranscribeRealtimeOptions } from "whisper.rn/index.js";
 import { request, PERMISSIONS, RESULTS } from "react-native-permissions";
+import { useTheme } from "./src/styles/theme"; // Importa el hook del tema
 
 const APP_DIRECTORY_NAME = "whisper-app-files";
-const ACCENT_COLOR = "#0A84FF";
 
 export default function App() {
+  const theme = useTheme(); // Usa el hook para obtener los colores del tema
+  const styles = getStyles(theme); // Genera los estilos dinámicamente
+
+  const { speak, stop: stopTts, isSpeaking, status: ttsStatus } = useTextToSpeech();
+  const [textToSpeak, setTextToSpeak] = useState(
+    "¡Hola! Esto es una prueba de la funcionalidad de texto a voz."
+  );
   const [realtimeTranscriber, setRealtimeTranscriber] = useState<any>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isRealtimeActive, setIsRealtimeActive] = useState(false);
@@ -30,6 +38,9 @@ export default function App() {
   const [isDeletingModelId, setIsDeletingModelId] = useState<string | null>(
     null
   );
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedAudioPath, setRecordedAudioPath] = useState<string>("");
+  const [mediaRecorder, setMediaRecorder] = useState<any>(null);
 
   const {
     whisperContext,
@@ -46,7 +57,6 @@ export default function App() {
   } = useWhisperModels();
 
   useEffect(() => {
-    // Initialize with tiny model by default
     initializeModel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -83,6 +93,9 @@ export default function App() {
     }
 
     try {
+      // Pequeña espera para asegurar que la Activity esté lista
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 100));
+      
       const result = await request(permission);
       if (result === RESULTS.GRANTED) {
         console.log("Microphone permission granted");
@@ -95,8 +108,21 @@ export default function App() {
         );
         return false;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to verify microphone permission:", err);
+      
+      // Si el error es porque la Activity no está lista, reintentar
+      if (err?.message?.includes("not attached to an Activity")) {
+        console.log("Retrying permission request...");
+        await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
+        try {
+          const result = await request(permission);
+          return result === RESULTS.GRANTED;
+        } catch (retryErr) {
+          console.error("Retry failed:", retryErr);
+        }
+      }
+      
       Alert.alert(
         "Microphone Permission",
         "Unable to verify microphone permission. Please try again."
@@ -155,6 +181,157 @@ export default function App() {
     );
   };
 
+  const startRecording = async () => {
+    if (!whisperContext) {
+      Alert.alert("Error", "Whisper not initialized");
+      return;
+    }
+
+    try {
+      const hasMicPermission = await ensureMicrophonePermission();
+      if (!hasMicPermission) {
+        setError("Recording requires microphone access.");
+        return;
+      }
+
+      // Limpiar estado anterior
+      setIsRecording(true);
+      setTranscriptionResult("");
+      setError("");
+
+      console.log("Starting audio recording...");
+
+      const appDirectory = `${RNFS.DocumentDirectoryPath}/${APP_DIRECTORY_NAME}`;
+      await RNFS.mkdir(appDirectory).catch(() => {}); // Crear directorio si no existe
+      
+      const audioPath = `${appDirectory}/temp_recording.wav`;
+      
+      // Borrar grabación anterior si existe
+      await RNFS.unlink(audioPath).catch(() => {});
+      
+      setRecordedAudioPath(audioPath);
+
+      const realtimeOptions: TranscribeRealtimeOptions = {
+        language: "es",
+        realtimeAudioSec: 120, // 2 minutos máximo
+        realtimeAudioSliceSec: 120, // No procesar hasta el final
+        realtimeAudioMinSec: 1,
+        audioOutputPath: audioPath, // ¡AQUÍ SE GUARDA EL ARCHIVO!
+        audioSessionOnStartIos: {
+          category: "PlayAndRecord" as any,
+          options: ["MixWithOthers" as any],
+          mode: "Default" as any,
+        },
+        audioSessionOnStopIos: "restore" as any,
+      };
+
+      const { stop } = await whisperContext.transcribeRealtime(realtimeOptions);
+      setMediaRecorder({ stop });
+      
+      console.log("Recording started. Audio will be saved to:", audioPath);
+    } catch (err: any) {
+      const errorMessage = `Failed to start recording: ${err.message}`;
+      console.error(errorMessage);
+      setError(errorMessage);
+      Alert.alert("Recording Error", errorMessage);
+      setIsRecording(false);
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      console.log("Stopping recording...");
+      
+      if (mediaRecorder?.stop) {
+        await mediaRecorder.stop();
+      }
+      
+      setIsRecording(false);
+      setMediaRecorder(null);
+      
+      // Esperar un poco para que el archivo se termine de escribir
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
+      
+      console.log("Recording stopped. File saved at:", recordedAudioPath);
+      
+      // Preguntar si desea transcribir
+      Alert.alert(
+        "Grabación completa",
+        "¿Deseas transcribir el audio grabado?",
+        [
+          { 
+            text: "Cancelar", 
+            style: "cancel",
+            onPress: async () => {
+              // Borrar el archivo temporal
+              if (recordedAudioPath) {
+                await RNFS.unlink(recordedAudioPath).catch(() => {});
+                setRecordedAudioPath("");
+              }
+            }
+          },
+          { 
+            text: "Transcribir", 
+            onPress: () => transcribeRecordedAudio() 
+          }
+        ]
+      );
+    } catch (err: any) {
+      const errorMessage = `Failed to stop recording: ${err.message}`;
+      console.error(errorMessage);
+      setError(errorMessage);
+      Alert.alert("Recording Error", errorMessage);
+    }
+  };
+
+  const transcribeRecordedAudio = async () => {
+    if (!whisperContext) {
+      Alert.alert("Error", "Whisper not initialized");
+      return;
+    }
+
+    if (!recordedAudioPath) {
+      Alert.alert("Error", "No recorded audio found");
+      return;
+    }
+
+    try {
+      setIsTranscribing(true);
+      setTranscriptionResult("");
+      setError("");
+
+      console.log("Starting transcription of recorded audio:", recordedAudioPath);
+
+      const fileExists = await RNFS.exists(recordedAudioPath);
+      if (!fileExists) {
+        throw new Error("Recorded audio file not found");
+      }
+
+      const options = { language: "es" };
+      const { promise } = whisperContext.transcribe(`file://${recordedAudioPath}`, options);
+
+      const startTime = Date.now();
+      const { result } = await promise;
+      const endTime = Date.now();
+
+      console.log(`Transcription completed in ${endTime - startTime}ms`);
+      console.log("Result:", result);
+
+      setTranscriptionResult(result || "No transcription result");
+      
+      // Borrar el archivo temporal después de transcribir
+      await RNFS.unlink(recordedAudioPath).catch(() => {});
+      setRecordedAudioPath("");
+    } catch (err: any) {
+      const errorMessage = `Transcription failed: ${err.message}`;
+      console.error(errorMessage);
+      setError(errorMessage);
+      Alert.alert("Transcription Error", errorMessage);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   const transcribeAudio = async () => {
     if (!whisperContext) {
       Alert.alert("Error", "Whisper not initialized");
@@ -169,25 +346,19 @@ export default function App() {
       console.log("Starting transcription...");
 
       const appDirectory = `${RNFS.DocumentDirectoryPath}/${APP_DIRECTORY_NAME}`;
-      const audioFilePath = `${appDirectory}/sample.mp3`;
+      const audioFilePath = `${appDirectory}/sample.wav`;
 
-      // Descargar archivo si no existe
       const fileExists = await RNFS.exists(audioFilePath);
       if (!fileExists) {
         console.log("Downloading audio sample...");
         const url =
-          "https://mp3.downloadyt.com/wp-content/uploads/2024/07/Bb Trickz, Omar Montes, Tino JJ, El Baby R - Yo Soy el Más Chulo de España.mp3";
-
-        // create directory
+          "https://github.com/ggerganov/whisper.cpp/raw/master/samples/jfk.wav";
         await RNFS.mkdir(appDirectory);
-
-        // download
         await RNFS.downloadFile({ fromUrl: url, toFile: audioFilePath }).promise;
-        console.log("download complete (sample.mp3) file");
+        console.log("download complete (sample.wav) file");
       }
 
-      // Transcribe el audio
-      const options = { language: "es" };
+      const options = { language: "en" };
       const { promise } = whisperContext.transcribe(`file://${audioFilePath}`, options);
 
       const startTime = Date.now();
@@ -227,14 +398,10 @@ export default function App() {
 
       console.log("Starting real-time transcription...");
 
-      // Use the built-in transcribeRealtime method from whisper.rn
-      // transcribeRealtime de whisper.rn
       const realtimeOptions: TranscribeRealtimeOptions = {
         language: "es",
-        // session prolongada para que solo se detenga con acción del usuario
-         // Keep the session alive well past the default 30s ceiling so we only stop on user action
         realtimeAudioSec: 300,
-        realtimeAudioSliceSec: 20,
+        realtimeAudioSliceSec: 30,
         realtimeAudioMinSec: 2,
         audioSessionOnStartIos: {
           category: "PlayAndRecord" as any,
@@ -248,7 +415,6 @@ export default function App() {
         realtimeOptions
       );
 
-      // Subscribe to transcription events
       subscribe((event: any) => {
         const { isCapturing, data, processTime, recordingTime } = event;
 
@@ -261,27 +427,20 @@ export default function App() {
 
         if (data?.result) {
           const currentResult = data.result.trim();
-
-          // Always update the display - this ensures we never miss updates
           setRealtimeResult(currentResult);
-
-          // Debug logging to help track what's happening
           console.log(" Actualización en tiempo real:", {
             isCapturing,
             length: currentResult.length,
-            lastWords: currentResult.split(" ").slice(-5).join(" "), // Últimas 5 palabras
+            lastWords: currentResult.split(" ").slice(-5).join(" "),
             totalWords: currentResult.split(" ").length,
           });
         }
 
         if (!isCapturing) {
           console.log("Speech segment finished, but continuing to listen...");
-          // Don't stop the session - just log that this speech segment ended
-          // The transcription will continue listening for more speech
         }
       });
 
-      // Store the stop function
       setRealtimeTranscriber({ stop });
     } catch (err: any) {
       const errorMessage = `Real-time transcription failed: ${err.message}`;
@@ -299,7 +458,6 @@ export default function App() {
         setRealtimeTranscriber(null);
       }
 
-      // Capture the final result before clearing
       const finalTranscript = realtimeResult.trim();
       if (finalTranscript) {
         setRealtimeFinalResult(finalTranscript);
@@ -330,31 +488,31 @@ export default function App() {
     ? "Processing sample…"
     : "Idle";
   const storedModels = Object.entries(modelFiles);
-  const isDarkMode = useColorScheme() === 'dark';
+  const isDarkMode = theme.background === '#000000';
 
   return (
-    <SafeAreaView style={{...styles.safeArea, backgroundColor: isDarkMode ? '#000000' : '#ffffff' }}>
+    <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={{...styles.title, color: isDarkMode ? '#ffffff' : '#000000'}}>Whisper Demo</Text>
-          <Text style={{...styles.subtitle, color: isDarkMode ? '#cccccc' : '#333333'}}>
+          <Text style={styles.title}>Whisper Demo</Text>
+          <Text style={styles.subtitle}>
             Minima transcripción de modelos whisper.rn.
           </Text>
         </View>
 
         {error ? (
-          <View style={[styles.card, styles.errorCard]}>
-            <Text style={{...styles.cardLabel, color: isDarkMode ? '#ff6666' : '#cc0000'}}>Algo salió mal</Text>
+          <View style={styles.errorCard}>
+            <Text style={styles.cardLabel}>Algo salió mal</Text>
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
 
         <View style={styles.section}>
-          <Text style={{...styles.sectionLabel, color: isDarkMode ? '#cccccc' : '#333333'}}>Status</Text>
+          <Text style={styles.sectionLabel}>Status</Text>
           <View style={styles.statusRow}>
             <View
               style={[
@@ -419,7 +577,70 @@ export default function App() {
         ) : null}
 
         <View style={styles.section}>
-          <Text style={{...styles.sectionLabel, color: isDarkMode ? '#cccccc' : '#333333'}}>Acciones rápidas</Text>
+          <Text style={styles.sectionLabel}>Texto a Voz</Text>
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>Prueba la conversión de texto a voz</Text>
+            <TextInput
+              style={styles.textInput}
+              onChangeText={setTextToSpeak}
+              value={textToSpeak}
+              placeholder="Escribe algo para escuchar..."
+              placeholderTextColor={theme.textMuted}
+              multiline
+            />
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  styles.primaryButton,
+                  (isSpeaking || !textToSpeak) && styles.buttonDisabled,
+                ]}
+                onPress={() => speak(textToSpeak)}
+                disabled={isSpeaking || !textToSpeak}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {isSpeaking ? "Hablando..." : "Reproducir"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  styles.stopButton,
+                  !isSpeaking && styles.buttonDisabled,
+                ]}
+                onPress={stopTts}
+                disabled={!isSpeaking}
+              >
+                <Text style={styles.stopButtonText}>Detener</Text>
+              </TouchableOpacity>
+            </View>
+            {ttsStatus && <Text style={[styles.statusValue, { marginTop: 12 }]}>Estado: {ttsStatus}</Text>}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Grabación de Audio</Text>
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[
+                styles.button,
+                isRecording ? styles.stopButton : styles.primaryButton,
+                (!whisperContext || isTranscribing || isRealtimeActive) && styles.buttonDisabled,
+              ]}
+              onPress={isRecording ? stopRecording : startRecording}
+              disabled={!whisperContext || isTranscribing || isRealtimeActive}
+            >
+              <Text style={isRecording ? styles.stopButtonText : styles.primaryButtonText}>
+                {isRecording ? "⏹ Detener grabación" : "🎤 Grabar audio"}
+              </Text>
+            </TouchableOpacity>
+
+
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Acciones rápidas</Text>
           <View style={styles.buttonRow}>
             <TouchableOpacity
               style={[
@@ -462,9 +683,9 @@ export default function App() {
         </View>
 
         <View style={styles.section}>
-          <Text style={{...styles.sectionLabel, color: isDarkMode ? '#cccccc' : '#333333'}}>Modelos</Text>
+          <Text style={styles.sectionLabel}>Modelos</Text>
           <View style={styles.modelGrid}>
-            {["large-v3-turbo", "tiny", "base", "small"].map((modelId) => {
+            {["large-v3-turbo", "large-v3-turbo-q5_0", "tiny", "base", "small", "small-q5_1"].map((modelId) => {
               const isActive = getCurrentModel()?.id === modelId;
               return (
                 <TouchableOpacity
@@ -494,7 +715,7 @@ export default function App() {
 
         {storedModels.length > 0 ? (
           <View style={styles.section}>
-            <Text style={{...styles.sectionLabel, color: isDarkMode ? '#cccccc' : '#333333'}}>Modelos almacenados</Text>
+            <Text style={styles.sectionLabel}>Modelos almacenados</Text>
             {storedModels.map(([modelId, info]) => {
               const modelLabel = getModelById(modelId)?.label || modelId;
               const isCurrent = currentModelId === modelId;
@@ -541,9 +762,10 @@ export default function App() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any) => StyleSheet.create({
   safeArea: {
-    flex: 1
+    flex: 1,
+    backgroundColor: theme.background,
   },
   content: {
     paddingHorizontal: 20,
@@ -556,13 +778,25 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "700",
-    color: "#111111",
+    color: theme.text,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
     lineHeight: 20,
-    color: "#555555",
+    color: theme.textSecondary,
+  },
+  textInput: {
+    borderColor: theme.cardBorder,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
+    marginTop: 12,
+    marginBottom: 16,
+    minHeight: 60,
+    textAlignVertical: 'top',
+    color: theme.text,
   },
   section: {
     marginBottom: 28,
@@ -570,7 +804,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#777777",
+    color: theme.textMuted,
     textTransform: "uppercase",
     letterSpacing: 0.8,
     marginBottom: 12,
@@ -581,10 +815,10 @@ const styles = StyleSheet.create({
     marginHorizontal: -8,
   },
   statusCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: theme.cardBackground,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#e5e5ea",
+    borderColor: theme.cardBorder,
     padding: 16,
     marginHorizontal: 8,
     marginBottom: 12,
@@ -592,13 +826,13 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   statusCardActive: {
-    borderColor: ACCENT_COLOR,
-    backgroundColor: "#f5f8ff",
+    borderColor: theme.accent,
+    backgroundColor: theme.liveBackground,
   },
   statusTitle: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#666666",
+    color: theme.textMuted,
     marginBottom: 6,
     textTransform: "uppercase",
     letterSpacing: 0.6,
@@ -606,20 +840,20 @@ const styles = StyleSheet.create({
   statusValue: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#111111",
+    color: theme.text,
     lineHeight: 22,
   },
   card: {
-    backgroundColor: "#ffffff",
+    backgroundColor: theme.cardBackground,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#e5e5ea",
+    borderColor: theme.cardBorder,
     padding: 20,
     marginBottom: 24,
   },
   liveCard: {
-    borderColor: ACCENT_COLOR,
-    backgroundColor: "#f5f8ff",
+    borderColor: theme.accent,
+    backgroundColor: theme.liveBackground,
   },
   cardHeader: {
     flexDirection: "row",
@@ -630,29 +864,29 @@ const styles = StyleSheet.create({
   cardLabel: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#777777",
+    color: theme.textMuted,
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
   cardText: {
     fontSize: 16,
     lineHeight: 24,
-    color: "#111111",
+    color: theme.text,
   },
   placeholderText: {
-    color: "#8e8e93",
+    color: theme.textMuted,
   },
   liveBadge: {
-    color: ACCENT_COLOR,
+    color: theme.accent,
     fontSize: 12,
     fontWeight: "600",
   },
   errorCard: {
-    borderColor: "#ff3b30",
-    backgroundColor: "#fff5f4",
+    borderColor: theme.errorBorder,
+    backgroundColor: theme.errorBackground,
   },
   errorText: {
-    color: "#b3261e",
+    color: theme.errorText,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -672,7 +906,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   primaryButton: {
-    backgroundColor: ACCENT_COLOR,
+    backgroundColor: theme.accent,
   },
   primaryButtonText: {
     color: "#ffffff",
@@ -681,12 +915,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   secondaryButton: {
-    backgroundColor: "#ffffff",
+    backgroundColor: theme.cardBackground,
     borderWidth: 1,
-    borderColor: "#d1d1d6",
+    borderColor: theme.cardBorder,
   },
   secondaryButtonText: {
-    color: "#111111",
+    color: theme.text,
     fontSize: 14,
     fontWeight: "600",
     letterSpacing: 0.3,
@@ -713,33 +947,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#d1d1d6",
+    borderColor: theme.cardBorder,
     marginHorizontal: 6,
     marginBottom: 12,
-    backgroundColor: "#ffffff",
+    backgroundColor: theme.cardBackground,
   },
   modelChipActive: {
-    borderColor: ACCENT_COLOR,
-    backgroundColor: "#f5f8ff",
+    borderColor: theme.accent,
+    backgroundColor: theme.liveBackground,
   },
   modelChipText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#111111",
+    color: theme.text,
   },
   modelChipTextActive: {
-    color: ACCENT_COLOR,
+    color: theme.accent,
   },
   storageRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: "#e5e5ea",
+    borderColor: theme.cardBorder,
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
-    backgroundColor: "#ffffff",
+    backgroundColor: theme.cardBackground,
   },
   storageMeta: {
     flex: 1,
@@ -748,20 +982,20 @@ const styles = StyleSheet.create({
   storageName: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#111111",
+    color: theme.text,
     marginBottom: 6,
   },
   storageDetails: {
     fontSize: 12,
-    color: "#666666",
+    color: theme.textMuted,
     marginBottom: 4,
   },
   storagePath: {
     fontSize: 11,
-    color: "#8e8e93",
+    color: theme.textMuted,
   },
   deleteLink: {
-    color: "#111111",
+    color: theme.text,
     fontSize: 12,
     fontWeight: "600",
   },
@@ -769,13 +1003,13 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   link: {
-    color: ACCENT_COLOR,
+    color: theme.accent,
     fontSize: 12,
     fontWeight: "600",
   },
   footerNote: {
     fontSize: 12,
-    color: "#8e8e93",
+    color: theme.textMuted,
     textAlign: "center",
     marginTop: 8,
   },

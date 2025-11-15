@@ -31,6 +31,16 @@ export const WHISPER_MODELS: WhisperModel[] = [
       quantizable: false,
     },
   },
+{
+    id: "large-v3-turbo-q5_0",
+    label: "Large Multilanguae Q5_0",
+    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin",
+    filename: "ggml-large-v3-turbo-q5_0.bin",
+    capabilities: {
+      multilingual: true,
+      quantizable: true,
+    },
+},
   {
     id: "tiny",
     label: "Tiny (en)",
@@ -72,6 +82,16 @@ export const WHISPER_MODELS: WhisperModel[] = [
       tdrz: true,
     },
   },
+  {
+    id: "small-q5_1",
+    label: "Small Q5_1",
+     url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin",
+    filename: "ggml-small-q5_1.bin",
+    capabilities: {
+      multilingual: true,
+      quantizable: true,
+    },
+  }
 ];
 
 interface ModelFileInfo {
