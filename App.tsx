@@ -182,107 +182,88 @@ export default function App() {
   };
 
   const startRecording = async () => {
-    if (!whisperContext) {
-      Alert.alert("Error", "Whisper not initialized");
+  if (!whisperContext) {
+    Alert.alert("Error", "Whisper not initialized");
+    return;
+  }
+
+  try {
+    const hasMicPermission = await ensureMicrophonePermission();
+    if (!hasMicPermission) {
+      setError("Recording requires microphone access.");
       return;
     }
 
-    try {
-      const hasMicPermission = await ensureMicrophonePermission();
-      if (!hasMicPermission) {
-        setError("Recording requires microphone access.");
-        return;
-      }
+    setIsRecording(true);
+    setTranscriptionResult("");
+    setError("");
 
-      // Limpiar estado anterior
-      setIsRecording(true);
-      setTranscriptionResult("");
-      setError("");
+    console.log("Starting audio recording (no real-time processing)...");
 
-      console.log("Starting audio recording...");
+    const appDirectory = `${RNFS.DocumentDirectoryPath}/${APP_DIRECTORY_NAME}`;
+    await RNFS.mkdir(appDirectory).catch(() => {});
+    
+    const audioPath = `${appDirectory}/temp_recording.wav`;
+    await RNFS.unlink(audioPath).catch(() => {});
+    
+    setRecordedAudioPath(audioPath);
 
-      const appDirectory = `${RNFS.DocumentDirectoryPath}/${APP_DIRECTORY_NAME}`;
-      await RNFS.mkdir(appDirectory).catch(() => {}); // Crear directorio si no existe
-      
-      const audioPath = `${appDirectory}/temp_recording.wav`;
-      
-      // Borrar grabación anterior si existe
-      await RNFS.unlink(audioPath).catch(() => {});
-      
-      setRecordedAudioPath(audioPath);
+    // ✅ Configuración optimizada: SOLO GRABA, no transcribe en tiempo real
+    const realtimeOptions: TranscribeRealtimeOptions = {
+      language: "es",
+      realtimeAudioSec: 120,        // Máximo 2 minutos
+      realtimeAudioSliceSec: 120,   // ✅ Igual al total = no procesa chunks
+      realtimeAudioMinSec: 120,     // ✅ No procesa hasta el final
+      audioOutputPath: audioPath,   // ✅ Solo guarda el archivo
+      // audioSessionOnStartIos: {
+      //   // category: "Record",          // ✅ Solo grabación (más eficiente)
+      //   // mode: "Measurement",         // ✅ Mejor calidad para voz
+      //   options: [],
+      // },
+      audioSessionOnStopIos: "restore",
+    };
 
-      const realtimeOptions: TranscribeRealtimeOptions = {
-        language: "es",
-        realtimeAudioSec: 120, // 2 minutos máximo
-        realtimeAudioSliceSec: 120, // No procesar hasta el final
-        realtimeAudioMinSec: 1,
-        audioOutputPath: audioPath, // ¡AQUÍ SE GUARDA EL ARCHIVO!
-        audioSessionOnStartIos: {
-          category: "PlayAndRecord" as any,
-          options: ["MixWithOthers" as any],
-          mode: "Default" as any,
-        },
-        audioSessionOnStopIos: "restore" as any,
-      };
+    const { stop } = await whisperContext.transcribeRealtime(realtimeOptions);
+    setMediaRecorder({ stop });
+    
+    console.log("✅ Recording started (audio-only mode). File:", audioPath);
+    console.log("📝 The model will NOT process audio until you stop recording.");
+  } catch (err: any) {
+    const errorMessage = `Failed to start recording: ${err.message}`;
+    console.error(errorMessage);
+    setError(errorMessage);
+    Alert.alert("Recording Error", errorMessage);
+    setIsRecording(false);
+  }
+};
 
-      const { stop } = await whisperContext.transcribeRealtime(realtimeOptions);
-      setMediaRecorder({ stop });
-      
-      console.log("Recording started. Audio will be saved to:", audioPath);
-    } catch (err: any) {
-      const errorMessage = `Failed to start recording: ${err.message}`;
-      console.error(errorMessage);
-      setError(errorMessage);
-      Alert.alert("Recording Error", errorMessage);
-      setIsRecording(false);
+const stopRecording = async () => {
+  try {
+    console.log("Stopping recording...");
+    
+    if (mediaRecorder?.stop) {
+      await mediaRecorder.stop();
     }
-  };
-
-  const stopRecording = async () => {
-    try {
-      console.log("Stopping recording...");
-      
-      if (mediaRecorder?.stop) {
-        await mediaRecorder.stop();
-      }
-      
-      setIsRecording(false);
-      setMediaRecorder(null);
-      
-      // Esperar un poco para que el archivo se termine de escribir
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
-      
-      console.log("Recording stopped. File saved at:", recordedAudioPath);
-      
-      // Preguntar si desea transcribir
-      Alert.alert(
-        "Grabación completa",
-        "¿Deseas transcribir el audio grabado?",
-        [
-          { 
-            text: "Cancelar", 
-            style: "cancel",
-            onPress: async () => {
-              // Borrar el archivo temporal
-              if (recordedAudioPath) {
-                await RNFS.unlink(recordedAudioPath).catch(() => {});
-                setRecordedAudioPath("");
-              }
-            }
-          },
-          { 
-            text: "Transcribir", 
-            onPress: () => transcribeRecordedAudio() 
-          }
-        ]
-      );
-    } catch (err: any) {
-      const errorMessage = `Failed to stop recording: ${err.message}`;
-      console.error(errorMessage);
-      setError(errorMessage);
-      Alert.alert("Recording Error", errorMessage);
-    }
-  };
+    
+    setIsRecording(false);
+    setMediaRecorder(null);
+    
+    // Esperar un poco para que el archivo se termine de escribir
+    await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
+    
+    console.log("Recording stopped. File saved at:", recordedAudioPath);
+    
+    // ✅ Transcribir automáticamente sin preguntar
+    console.log("Auto-transcribing recorded audio...");
+    await transcribeRecordedAudio();
+    
+  } catch (err: any) {
+    const errorMessage = `Failed to stop recording: ${err.message}`;
+    console.error(errorMessage);
+    setError(errorMessage);
+    Alert.alert("Recording Error", errorMessage);
+  }
+};
 
   const transcribeRecordedAudio = async () => {
     if (!whisperContext) {

@@ -1,0 +1,48 @@
+diff --git a/node_modules/@chuvincent/react-native-tts/android/.project b/node_modules/@chuvincent/react-native-tts/android/.project
+new file mode 100644
+index 0000000..663410a
+--- /dev/null
++++ b/node_modules/@chuvincent/react-native-tts/android/.project
+@@ -0,0 +1,28 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>chuvincent_react-native-tts</name>
++	<comment>Project chuvincent_react-native-tts created by Buildship.</comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.buildship.core.gradleprojectbuilder</name>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.buildship.core.gradleprojectnature</nature>
++	</natures>
++	<filteredResources>
++		<filter>
++			<id>1765146386487</id>
++			<name></name>
++			<type>30</type>
++			<matcher>
++				<id>org.eclipse.core.resources.regexFilterMatcher</id>
++				<arguments>node_modules|\.git|__CREATED_BY_JAVA_LANGUAGE_SERVER__</arguments>
++			</matcher>
++		</filter>
++	</filteredResources>
++</projectDescription>
+diff --git a/node_modules/@chuvincent/react-native-tts/android/build.gradle b/node_modules/@chuvincent/react-native-tts/android/build.gradle
+index dbbe046..d9c802c 100644
+--- a/node_modules/@chuvincent/react-native-tts/android/build.gradle
++++ b/node_modules/@chuvincent/react-native-tts/android/build.gradle
+@@ -4,7 +4,8 @@ def safeExtGet(prop, fallback) {
+ 
+ buildscript {
+     repositories {
+-        jcenter()
++        google()       // Agrega esto (necesario para Android)
++        mavenCentral() // Agrega esto
+     }
+ 
+     dependencies {
