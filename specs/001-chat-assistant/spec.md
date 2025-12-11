@@ -5,6 +5,11 @@
 **Status**: Draft
 **Input**: User description: "quiero crear un chat como asistente que pueda entender audio , texto y ya sea con un tts o texto ver mis resultados este funcionara como un asistente esta parte es por asi decirlo la aplicacion cliente aparte estoy haciendo el api, esto lo defines en espaniol, si puedes darme un diagrama de como sera este flujo"
 
+## Clarifications
+
+### Session 2025-12-11
+- Q: ¿Qué modelo de Whisper se debe usar para la transcripción local? → A: **small-q5_1** (con soporte multi-lenguaje, ~181.3 MB).
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Interacción por Texto (Priority: P1)
@@ -65,7 +70,7 @@ El usuario puede escuchar la respuesta del asistente mediante síntesis de voz (
 2.  **Gestión de Audio (Input)**:
     *   Solicitud y manejo de permisos de micrófono.
     *   Captura de audio mediante el micrófono del dispositivo.
-    *   **Transcripción Local Obligatoria**: Uso de modelo de IA en dispositivo (Whisper) para convertir audio a texto. **Restricción**: No existe funcionalidad para subir archivos de audio al backend.
+    *   **Transcripción Local Obligatoria**: Uso de modelo de IA en dispositivo (**Whisper small-q5_1 multi-language**, ~181.3 MB) para convertir audio a texto. **Restricción**: No existe funcionalidad para subir archivos de audio al backend.
 
 3.  **Gestión de Audio (Output - TTS)**:
     *   Síntesis de voz para leer las respuestas del asistente.
