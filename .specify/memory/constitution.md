@@ -1,50 +1,34 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+SYNC IMPACT REPORT
+Version change: 0.0.0 -> 1.0.0
+List of modified principles:
+- Defined I. Arquitectura Basada en Features
+- Defined II. Separación Estricta de Responsabilidades (Logic vs UI)
+- Defined III. Código Limpio y Escalable (Clean Code)
+- Defined IV. Estilos Nativos (Native Styling)
+Removed sections: Principle 5, Section 2, Section 3 (Unused placeholders)
+Templates requiring updates: None (Templates are generic enough)
+Follow-up TODOs: None
+-->
+
+# Asistente Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Arquitectura Basada en Features (Feature-Based Architecture)
+El código se organiza estrictamente por dominio de negocio (`features/`), no por tipo técnico. Cada feature debe ser autocontenida en `src/features/[feature-name]` con la estructura obligatoria: `api/` (lógica pura), `components/` (UI presentacional), `hooks/` (lógica de negocio/estado), y `screens/` (conexión con navegación). `shared/` se reserva exclusivamente para elementos agnósticos al dominio.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Separación Estricta de Responsabilidades (Logic vs UI)
+La UI (`components`, `screens`) solo debe renderizar datos y capturar eventos; prohibido contener lógica de negocio o llamadas directas a APIs. Toda la lógica de estado, efectos y comunicación debe residir en `hooks` personalizados. La capa `api` debe consistir en funciones puras de JavaScript.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Código Limpio y Escalable (Clean Code)
+Se prioriza la legibilidad y mantenibilidad. Nombres de variables y funciones deben ser descriptivos (en español o inglés, manteniendo consistencia). Funciones pequeñas con responsabilidad única. Aplicar principios DRY (Don't Repeat Yourself) y SOLID donde aplique para facilitar la escalabilidad.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
-
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
-
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
-
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
-
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
-
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### IV. Estilos Nativos (Native Styling)
+El estilizado debe realizarse exclusivamente mediante `StyleSheet` de React Native o el sistema de temas centralizado en `shared/theme`. No se permite el uso de Tailwind CSS ni librerías de estilos externas por el momento.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+Esta constitución define la estructura y reglas inquebrantables del proyecto. Cualquier desviación debe ser justificada y aprobada mediante una enmienda a este documento. Las revisiones de código (PRs) deben verificar estrictamente el cumplimiento de la arquitectura basada en features y la separación de lógica/UI.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2025-12-11 | **Last Amended**: 2025-12-11
