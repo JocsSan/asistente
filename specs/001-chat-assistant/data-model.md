@@ -23,6 +23,7 @@ Estado global de la sesión de chat (manejado por `useChatSession`).
 | `isTyping` | `boolean` | Indicador de si el bot está "escribiendo" o procesando |
 | `isRecording` | `boolean` | Indicador de si el usuario está grabando audio |
 | `isTranscribing` | `boolean` | Indicador de si Whisper está procesando audio |
+| `autoPlayEnabled` | `boolean` | Preferencia: ¿Leer respuestas automáticamente? (Persistido) |
 
 ## State Transitions
 
