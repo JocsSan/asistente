@@ -28,7 +28,7 @@ Se prioriza la legibilidad y mantenibilidad. Nombres de variables y funciones de
 El estilizado debe realizarse exclusivamente mediante `StyleSheet` de React Native o el sistema de temas centralizado en `shared/theme`. No se permite el uso de Tailwind CSS ni librerías de estilos externas por el momento.
 
 ### V. Control de Versiones y Commits (Git Workflow)
-Todos los commits deben seguir estrictamente la convención **Conventional Commits** e incluir un **emoji** representativo después de los dos puntos.
+Todos los commits deben seguir estrictamente la convención **Conventional Commits** e incluir un **emoji** representativo después de los dos puntos. La descripción del commit debe escribirse estrictamente en **español**.
 Formato: `<tipo>(<scope>): <emoji> <descripción>`
 
 #### Tabla de Referencia Gitmoji
