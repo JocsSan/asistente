@@ -111,6 +111,10 @@ Formato: `<tipo>(<scope>): <emoji> <descripción>`
 ### VI. Pruebas (Testing)
 Las pruebas deben ubicarse colocalizadas dentro de cada feature en una carpeta `__tests__` (`src/features/[feature-name]/__tests__/`). Las descripciones de los casos de prueba (`describe`, `it`, `test`) deben escribirse estrictamente en **español**.
 
+### VII. Integridad del Flujo de Trabajo (Workflow Integrity)
+Antes de iniciar una nueva especificación o feature, es obligatorio tener el repositorio en un estado limpio (commit realizado) y verificado (tests pasando).
+*Excepción*: Esta regla aplica a cambios funcionales; se pueden obviar configuraciones efímeras de entornos de prueba (URLs, variables temporales) que no afecten la lógica.
+
 ## Governance
 
 Esta constitución define la estructura y reglas inquebrantables del proyecto. Cualquier desviación debe ser justificada y aprobada mediante una enmienda a este documento. Las revisiones de código (PRs) deben verificar estrictamente el cumplimiento de la arquitectura basada en features y la separación de lógica/UI.
