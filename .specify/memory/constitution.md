@@ -28,8 +28,8 @@ Se prioriza la legibilidad y mantenibilidad. Nombres de variables y funciones de
 El estilizado debe realizarse exclusivamente mediante `StyleSheet` de React Native o el sistema de temas centralizado en `shared/theme`. No se permite el uso de Tailwind CSS ni librerías de estilos externas por el momento.
 
 ### V. Control de Versiones y Commits (Git Workflow)
-Todos los commits deben seguir estrictamente la convención **Conventional Commits** e incluir un **emoji** representativo al inicio (Gitmoji).
-Formato: `<emoji> <tipo>(<scope>): <descripción>`
+Todos los commits deben seguir estrictamente la convención **Conventional Commits** e incluir un **emoji** representativo después de los dos puntos.
+Formato: `<tipo>(<scope>): <emoji> <descripción>`
 
 #### Tabla de Referencia Gitmoji
 
@@ -107,6 +107,9 @@ Formato: `<emoji> <tipo>(<scope>): <descripción>`
 | 💸 | `:money_with_wings:` | Add sponsorships or money related infrastructure. |
 | 🧵 | `:thread:` | Add or update code related to multithreading or concurrency. |
 | 🦺 | `:safety_vest:` | Add or update code related to validation. |
+
+### VI. Pruebas (Testing)
+Las pruebas deben ubicarse colocalizadas dentro de cada feature en una carpeta `__tests__` (`src/features/[feature-name]/__tests__/`). Las descripciones de los casos de prueba (`describe`, `it`, `test`) deben escribirse estrictamente en **español**.
 
 ## Governance
 
