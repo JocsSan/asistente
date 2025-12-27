@@ -1,0 +1,31 @@
+openapi: 3.0.0
+info:
+  title: Chat Assistant API
+  version: 1.0.0
+paths:
+  /chat/message:
+    post:
+      summary: Send a message to the bot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                sessionId:
+                  type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reply:
+                    type: string
+                  timestamp:
+                    type: number
